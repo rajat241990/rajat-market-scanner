@@ -136,30 +136,23 @@ def evaluate_gtf_setup(ticker):
                         if risk <= 0: continue
                         t1 = pl + (2 * risk)
 
-                        lines = [
-                            "=====================================",
-                            "🟢 <b>GTF MTFA DEMAND ALERT: " + ticker + "</b>",
-                            "=====================================",
-                            "",
-                            "<b>I. MULTI-TIMEFRAME ALIGNMENT (MIT)</b>",
-                            "• HTF (Monthly) Curve: " + curve_loc,
-                            "• HTF Supply: Rs " + htf_sup_str + " | HTF Demand: Rs " + htf_dem_str,
-                            "• ITF (Weekly) Trend: " + itf_trend,
-                            "",
-                            "<b>II. LTF (DAILY) EXECUTION ZONE</b>",
-                            "• CMP: Rs " + str(round(cmp, 2)),
-                            "• Proximal Line (Buy Entry): Rs " + str(round(pl, 2)),
-                            "• Distal Line (Stop Loss): Rs " + str(round(dl, 2)),
-                            "• Zone Formation: DBR (Authentic Origin)",
-                            "• Closing Concept: Verified ✅",
-                            "",
-                            "<b>III. POSITION SIZING (Rs 1 Lakh)</b>",
-                            "• Risk/Share: Rs " + str(round(risk, 2)),
-                            "• Target 1 (2:1): Rs " + str(round(t1, 2)),
-                            "• Beginner (1%): " + str(int(1000/risk)) + " Qty",
-                            "• Pro (2%): " + str(int(2000/risk)) + " Qty"
-                        ]
-                        send_telegram_alert("\n".join(lines))
+                       msg = (
+                            "🟢 GTF MTFA DEMAND ALERT: " + ticker + "\n\n"
+                            "I. MULTI-TIMEFRAME ALIGNMENT\n"
+                            "• HTF Curve: " + curve_loc + "\n"
+                            "• HTF Supply: Rs " + htf_sup_str + "\n"
+                            "• HTF Demand: Rs " + htf_dem_str + "\n"
+                            "• ITF Trend: " + itf_trend + "\n\n"
+                            "II. LTF EXECUTION ZONE\n"
+                            "• CMP: Rs " + str(round(cmp, 2)) + "\n"
+                            "• Entry (PL): Rs " + str(round(pl, 2)) + "\n"
+                            "• Stop Loss (DL): Rs " + str(round(dl, 2)) + "\n\n"
+                            "III. POSITION SIZING (Rs 1 Lakh)\n"
+                            "• Target 1: Rs " + str(round(t1, 2)) + "\n"
+                            "• Beginner (1%): " + str(q_beg) + " Qty\n"
+                            "• Pro (2%): " + str(q_pro) + " Qty"
+                        )
+                        send_telegram_alert(msg)
                         break
 
             # LTF Supply Reversal (RBD)
@@ -173,30 +166,23 @@ def evaluate_gtf_setup(ticker):
                         if risk <= 0: continue
                         t1 = pl - (2 * risk)
 
-                        lines = [
-                            "=====================================",
-                            "🔴 <b>GTF MTFA SUPPLY ALERT: " + ticker + "</b>",
-                            "=====================================",
-                            "",
-                            "<b>I. MULTI-TIMEFRAME ALIGNMENT (MIT)</b>",
-                            "• HTF (Monthly) Curve: " + curve_loc,
-                            "• HTF Supply: Rs " + htf_sup_str + " | HTF Demand: Rs " + htf_dem_str,
-                            "• ITF (Weekly) Trend: " + itf_trend,
-                            "",
-                            "<b>II. LTF (DAILY) EXECUTION ZONE</b>",
-                            "• CMP: Rs " + str(round(cmp, 2)),
-                            "• Proximal Line (Sell Entry): Rs " + str(round(pl, 2)),
-                            "• Distal Line (Stop Loss): Rs " + str(round(dl, 2)),
-                            "• Zone Formation: RBD (Authentic Origin)",
-                            "• Closing Concept: Verified ✅",
-                            "",
-                            "<b>III. POSITION SIZING (Rs 1 Lakh)</b>",
-                            "• Risk/Share: Rs " + str(round(risk, 2)),
-                            "• Target 1 (2:1): Rs " + str(round(t1, 2)),
-                            "• Beginner (1%): " + str(int(1000/risk)) + " Qty",
-                            "• Pro (2%): " + str(int(2000/risk)) + " Qty"
-                        ]
-                        send_telegram_alert("\n".join(lines))
+                         msg = (
+                            "🔴 GTF MTFA SUPPLY ALERT: " + ticker + "\n\n"
+                            "I. MULTI-TIMEFRAME ALIGNMENT\n"
+                            "• HTF Curve: " + curve_loc + "\n"
+                            "• HTF Supply: Rs " + htf_sup_str + "\n"
+                            "• HTF Demand: Rs " + htf_dem_str + "\n"
+                            "• ITF Trend: " + itf_trend + "\n\n"
+                            "II. LTF EXECUTION ZONE\n"
+                            "• CMP: Rs " + str(round(cmp, 2)) + "\n"
+                            "• Entry (PL): Rs " + str(round(pl, 2)) + "\n"
+                            "• Stop Loss (DL): Rs " + str(round(dl, 2)) + "\n\n"
+                            "III. POSITION SIZING (Rs 1 Lakh)\n"
+                            "• Target 1: Rs " + str(round(t1, 2)) + "\n"
+                            "• Beginner (1%): " + str(q_beg) + " Qty\n"
+                            "• Pro (2%): " + str(q_pro) + " Qty"
+                        )
+                        send_telegram_alert(msg)
                         break
     except Exception as e:
         pass
