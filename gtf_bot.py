@@ -135,8 +135,10 @@ def evaluate_gtf_setup(ticker):
                         risk = pl - dl
                         if risk <= 0: continue
                         t1 = pl + (2 * risk)
+                        q_beg = int(1000 / risk)
+                        q_pro = int(2000 / risk)
 
-                       msg = (
+                        msg = (
                             "🟢 GTF MTFA DEMAND ALERT: " + ticker + "\n\n"
                             "I. MULTI-TIMEFRAME ALIGNMENT\n"
                             "• HTF Curve: " + curve_loc + "\n"
@@ -165,8 +167,10 @@ def evaluate_gtf_setup(ticker):
                         risk = dl - pl
                         if risk <= 0: continue
                         t1 = pl - (2 * risk)
+                        q_beg = int(1000 / risk)
+                        q_pro = int(2000 / risk)
 
-                         msg = (
+                        msg = (
                             "🔴 GTF MTFA SUPPLY ALERT: " + ticker + "\n\n"
                             "I. MULTI-TIMEFRAME ALIGNMENT\n"
                             "• HTF Curve: " + curve_loc + "\n"
