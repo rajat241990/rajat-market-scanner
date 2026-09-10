@@ -109,6 +109,6 @@ def evaluate_gtf_setup(ticker):
         print(f"Error scanning {ticker}: {e}")
 
 if __name__ == "__main__":
-    send_telegram_alert("🚀 *GTF Scanner Active:* Running analysis on watchlist...")
+    send_telegram_alert("✅ *GTF Scanner Test Ping:* GitHub Actions is successfully connected to your Telegram bot!")
     for symbol in WATCHLIST:
         evaluate_gtf_setup(symbol)
