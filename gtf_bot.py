@@ -1,4 +1,4 @@
-import os
+ import os
 import requests
 import yfinance as yf
 
@@ -6,7 +6,6 @@ import yfinance as yf
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Nifty 100 + Your Personal Watchlist (NSE tickers end with .NS)
 WATCHLIST = [
     "ABB.NS", "ADANIENT.NS", "ADANIGREEN.NS", "ADANIPORTS.NS", "ADANIPOWER.NS", "ATGL.NS", 
     "AMBUJACEM.NS", "APOLLOHOSP.NS", "ASIANPAINT.NS", "DMART.NS", "AXISBANK.NS", "BAJAJ-AUTO.NS", 
@@ -29,11 +28,10 @@ WATCHLIST = [
 ]
 
 def send_telegram_alert(message):
-    if not TELEGRAM_TOKEN or not CHAT_ID:
-        print("Telegram secrets missing!")
-        return
+    if not TELEGRAM_TOKEN or not CHAT_ID: return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": CHAT_ID, "text": message, "parse_mode": "Markdown"})
+    payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML", "disable_web_page_preview": True}
+    requests.post(url, json=payload)
 
 def is_exciting(candle):
     rng = float(candle['High']) - float(candle['Low'])
@@ -47,18 +45,24 @@ def is_base(candle):
     body = abs(float(candle['Close']) - float(candle['Open']))
     return (body / rng) <= 0.50
 
+def calculate_ema(df, period):
+    return df['Close'].ewm(span=period, adjust=False).mean()
+
 def evaluate_gtf_setup(ticker):
-    print(f"Scanning {ticker}...")
     try:
         stock = yf.Ticker(ticker)
-        df = stock.history(period="3mo", interval="1d")
-        
-        if df.empty or len(df) < 30:
-            print(f"Insufficient data for {ticker}")
-            return
+        df = stock.history(period="6mo", interval="1d")
+        if df.empty or len(df) < 50: return
 
+        # Calculate EMAs for Trend Confluence
+        df['EMA20'] = calculate_ema(df, 20)
+        df['EMA50'] = calculate_ema(df, 50)
+        
         cmp = float(df['Close'].iloc[-1])
-        print(f"{ticker} CMP: ₹{cmp:.2f}")
+        ema20 = float(df['EMA20'].iloc[-1])
+        ema50 = float(df['EMA50'].iloc[-1])
+        
+        cross_status = "Golden Cross 🟢" if ema20 > ema50 else "Death Cross 🔴"
         
         for i in range(len(df) - 4, 3, -1):
             leg_in = df.iloc[i-1]
@@ -71,34 +75,100 @@ def evaluate_gtf_setup(ticker):
             
             # 1. Drop-Base-Rally (Demand Reversal)
             if in_close < in_open and is_base(base) and out_close > out_open and is_exciting(leg_out):
-                if out_close > in_high:
+                if out_close > in_high: # Closing Concept
                     pl = max(base_open, base_close)
                     dl = min(in_low, base_low, out_low)
                     
-                    subsequent_lows = df['Low'].iloc[i+2:].astype(float)
-                    if not (subsequent_lows <= pl).any() and cmp >= pl and ((cmp - pl) / pl) <= 0.015:
+                    subs_lows = df['Low'].iloc[i+2:].astype(float)
+                    if not (subs_lows <= pl).any() and cmp >= pl and ((cmp - pl) / pl) <= 0.015:
                         risk = pl - dl
+                        if risk == 0: continue
                         t1 = pl + (2 * risk)
-                        send_telegram_alert(f"🚨 *GTF DEMAND ALERT (DBR)*\n*Stock:* `{ticker}`\n*CMP:* ₹{cmp:.2f}\n*Zone:* PL=₹{pl:.2f} | DL=₹{dl:.2f}\n*Target:* ₹{t1:.2f}")
+                        
+                        # Position Sizing based on 1 Lakh Capital rules
+                        qty_beg = int(1000 / risk)
+                        qty_int = int(1500 / risk)
+                        qty_pro = int(2000 / risk)
+                        
+                        msg = f"""<b>🟢 GTF DEMAND ENGINE: {ticker}</b>
+
+<b>I. Zone Anatomy (DBR)</b>
+• <b>CMP:</b> ₹{cmp:.2f}
+• <b>Proximal Line (Entry):</b> ₹{pl:.2f}
+• <b>Distal Line (SL):</b> ₹{dl:.2f}
+• <b>Status:</b> Authentic Origin (Fresh)
+• <b>Closing Concept:</b> Verified ✅
+
+<b>II. Trend & Confluence</b>
+• <b>EMA 20 Status:</b> ₹{ema20:.2f}
+• <b>Momentum:</b> {cross_status}
+
+<b>III. Risk Calibration (₹1 Lakh)</b>
+• <b>Risk/Share:</b> ₹{risk:.2f}
+• <b>Beginner (1% / ₹1000):</b> {qty_beg} Qty
+• <b>Intermed (1.5% / ₹1500):</b> {qty_int} Qty
+• <b>Pro (2% / ₹2000):</b> {qty_pro} Qty
+• <b>Target 1 (2:1):</b> ₹{t1:.2f}
+
+<b>IV. TradingView Pine Script</b>
+<code>//@version=5
+indicator("GTF Setup", overlay=true)
+plot({pl:.2f}, "PL", color=color.blue, linewidth=2)
+plot({dl:.2f}, "DL", color=color.red, linewidth=2)
+plot({t1:.2f}, "Target", color=color.green, linewidth=2)
+var box dz = box.new(bar_index-10, {pl:.2f}, bar_index+15, {dl:.2f}, bgcolor=color.new(color.green, 85), border_color=color.green)</code>"""
+                        send_telegram_alert(msg)
                         break
 
             # 2. Rally-Base-Drop (Supply Reversal)
             if in_close > in_open and is_base(base) and out_close < out_open and is_exciting(leg_out):
-                if out_close < in_low:
+                if out_close < in_low: # Closing Concept
                     pl = min(base_open, base_close)
                     dl = max(in_high, base_high, out_high)
                     
-                    subsequent_highs = df['High'].iloc[i+2:].astype(float)
-                    if not (subsequent_highs >= pl).any() and cmp <= pl and ((pl - cmp) / pl) <= 0.015:
+                    subs_highs = df['High'].iloc[i+2:].astype(float)
+                    if not (subs_highs >= pl).any() and cmp <= pl and ((pl - cmp) / pl) <= 0.015:
                         risk = dl - pl
+                        if risk == 0: continue
                         t1 = pl - (2 * risk)
-                        send_telegram_alert(f"⚠️ *GTF SUPPLY ALERT (RBD)*\n*Stock:* `{ticker}`\n*CMP:* ₹{cmp:.2f}\n*Zone:* PL=₹{pl:.2f} | DL=₹{dl:.2f}\n*Target:* ₹{t1:.2f}")
+                        
+                        # Position Sizing based on 1 Lakh Capital rules
+                        qty_beg = int(1000 / risk)
+                        qty_int = int(1500 / risk)
+                        qty_pro = int(2000 / risk)
+                        
+                        msg = f"""<b>🔴 GTF SUPPLY ENGINE: {ticker}</b>
+
+<b>I. Zone Anatomy (RBD)</b>
+• <b>CMP:</b> ₹{cmp:.2f}
+• <b>Proximal Line (Sell):</b> ₹{pl:.2f}
+• <b>Distal Line (SL):</b> ₹{dl:.2f}
+• <b>Status:</b> Authentic Origin (Fresh)
+• <b>Closing Concept:</b> Verified ✅
+
+<b>II. Trend & Confluence</b>
+• <b>EMA 20 Status:</b> ₹{ema20:.2f}
+• <b>Momentum:</b> {cross_status}
+
+<b>III. Risk Calibration (₹1 Lakh)</b>
+• <b>Risk/Share:</b> ₹{risk:.2f}
+• <b>Beginner (1% / ₹1000):</b> {qty_beg} Qty
+• <b>Intermed (1.5% / ₹1500):</b> {qty_int} Qty
+• <b>Pro (2% / ₹2000):</b> {qty_pro} Qty
+• <b>Target 1 (2:1):</b> ₹{t1:.2f}
+
+<b>IV. TradingView Pine Script</b>
+<code>//@version=5
+indicator("GTF Setup", overlay=true)
+plot({pl:.2f}, "PL", color=color.blue, linewidth=2)
+plot({dl:.2f}, "DL", color=color.red, linewidth=2)
+plot({t1:.2f}, "Target", color=color.green, linewidth=2)
+var box sz = box.new(bar_index-10, {dl:.2f}, bar_index+15, {pl:.2f}, bgcolor=color.new(color.red, 85), border_color=color.red)</code>"""
+                        send_telegram_alert(msg)
                         break
     except Exception as e:
-        print(f"Error scanning {ticker}: {e}")
+        pass
 
 if __name__ == "__main__":
-    # Test ping is disabled so you only get real alerts
-    # send_telegram_alert("🚀 *GTF Scanner Active:* Running analysis on watchlist...")
     for symbol in WATCHLIST:
         evaluate_gtf_setup(symbol)
