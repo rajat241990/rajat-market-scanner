@@ -202,7 +202,6 @@ def evaluate_gtf_setup(ticker):
                         break
     except Exception as e:
 # ... existing code ...
-```
 
 ### Key Additions Explained:
 1. **RBR & DBD Logic:** The code now properly looks for Rally (`in_close > in_open`) - Base - Rally (`out_close > out_open`) and Drop - Base - Drop combinations.
