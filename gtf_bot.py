@@ -6,9 +6,26 @@ import yfinance as yf
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+# Nifty 100 + Your Personal Watchlist (NSE tickers end with .NS)
 WATCHLIST = [
-    "RELIANCE.NS", "HDFCBANK.NS", "SBIN.NS", 
-    "JSWINFRA.NS", "NMDC.NS", "IREDA.NS", "ONGC.NS", "NESTLEIND.NS"
+    "ABB.NS", "ADANIENT.NS", "ADANIGREEN.NS", "ADANIPORTS.NS", "ADANIPOWER.NS", "ATGL.NS", 
+    "AMBUJACEM.NS", "APOLLOHOSP.NS", "ASIANPAINT.NS", "DMART.NS", "AXISBANK.NS", "BAJAJ-AUTO.NS", 
+    "BAJFINANCE.NS", "BAJAJFINSV.NS", "BANKBARODA.NS", "BEL.NS", "BHARATFORG.NS", "BHEL.NS", 
+    "BPCL.NS", "BHARTIARTL.NS", "BOSCHLTD.NS", "BRITANNIA.NS", "CANBK.NS", "CHOLAFIN.NS", 
+    "CIPLA.NS", "COALINDIA.NS", "COFORGE.NS", "COLPAL.NS", "CONCOR.NS", "CROMPTON.NS", 
+    "CUMMINSIND.NS", "DIVISLAB.NS", "DIXON.NS", "DLF.NS", "DRREDDY.NS", "EICHERMOT.NS", 
+    "GAIL.NS", "GICRE.NS", "GODREJCP.NS", "GODREJPROP.NS", "GRASIM.NS", "HAVELLS.NS", "HCLTECH.NS", 
+    "HDFCAMC.NS", "HDFCBANK.NS", "HDFCLIFE.NS", "HEROMOTOCO.NS", "HINDALCO.NS", "HAL.NS", 
+    "HINDPETRO.NS", "HINDUNILVR.NS", "ICICIBANK.NS", "ICICIGI.NS", "ICICIPRULI.NS", "ITC.NS", 
+    "IOC.NS", "IRCTC.NS", "IREDA.NS", "IRFC.NS", "INDUSINDBK.NS", "NAUKRI.NS", "INFY.NS", "INDIGO.NS", 
+    "JSWINFRA.NS", "JSWSTEEL.NS", "JINDALSTEL.NS", "JIOFIN.NS", "KOTAKBANK.NS", "LT.NS", "LTIM.NS", 
+    "LUPIN.NS", "M&M.NS", "MARICO.NS", "MARUTI.NS", "MUTHOOTFIN.NS", "NMDC.NS", "NTPC.NS", 
+    "NESTLEIND.NS", "ONGC.NS", "PAGEIND.NS", "PIIND.NS", "PIDILITIND.NS", "PFC.NS", 
+    "POWERGRID.NS", "PNB.NS", "RECLTD.NS", "RELIANCE.NS", "SBICARD.NS", "SBILIFE.NS", 
+    "SBIN.NS", "SHREECEM.NS", "SIEMENS.NS", "SRF.NS", "SUNPHARMA.NS", "TVSMOTOR.NS", 
+    "TCS.NS", "TATACONSUM.NS", "TATAMOTORS.NS", "TATAELXSI.NS", "TATAPOWER.NS", "TATASTEEL.NS", 
+    "TECHM.NS", "TITAN.NS", "TORNTPHARM.NS", "TRENT.NS", "ULTRACEMCO.NS", "VBL.NS", 
+    "VEDL.NS", "WIPRO.NS", "ZOMATO.NS", "ZYDUSLIFE.NS"
 ]
 
 def send_telegram_alert(message):
@@ -33,7 +50,6 @@ def is_base(candle):
 def evaluate_gtf_setup(ticker):
     print(f"Scanning {ticker}...")
     try:
-        # BULLETPROOF FIX: Use yf.Ticker().history() instead of yf.download()
         stock = yf.Ticker(ticker)
         df = stock.history(period="3mo", interval="1d")
         
@@ -44,7 +60,6 @@ def evaluate_gtf_setup(ticker):
         cmp = float(df['Close'].iloc[-1])
         print(f"{ticker} CMP: ₹{cmp:.2f}")
         
-        # Scan recent candles for Reversals (DBR & RBD)
         for i in range(len(df) - 4, 3, -1):
             leg_in = df.iloc[i-1]
             base = df.iloc[i]
@@ -83,6 +98,7 @@ def evaluate_gtf_setup(ticker):
         print(f"Error scanning {ticker}: {e}")
 
 if __name__ == "__main__":
-   # send_telegram_alert("🚀 *GTF Scanner Active:* Running analysis on watchlist...")
+    # Test ping is disabled so you only get real alerts
+    # send_telegram_alert("🚀 *GTF Scanner Active:* Running analysis on watchlist...")
     for symbol in WATCHLIST:
         evaluate_gtf_setup(symbol)
