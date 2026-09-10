@@ -94,30 +94,17 @@ def evaluate_gtf_setup(ticker):
                         q_int = int(1500 / risk)
                         q_pro = int(2000 / risk)
 
-                        msg = (
-                            f"<b>🟢 GTF DEMAND ENGINE: {ticker}</b>\n\n"
-                            f"<b>I. Zone Anatomy (DBR)</b>\n"
-                            f"• CMP: ₹{cmp:.2f}\n"
-                            f"• Proximal Line (Entry): ₹{pl:.2f}\n"
-                            f"• Distal Line (SL): ₹{dl:.2f}\n"
-                            f"• Status: Authentic Origin (Fresh)\n"
-                            f"• Closing Concept: Verified ✅\n\n"
-                            f"<b>II. Trend & Confluence</b>\n"
-                            f"• 20 EMA: ₹{ema20:.2f}\n"
-                            f"• 50 EMA: ₹{ema50:.2f}\n"
-                            f"• Alignment: {cross}\n\n"
-                            f"<b>III. Risk Calibration (₹1 Lakh)</b>\n"
-                            f"• Risk/Share: ₹{risk:.2f}\n"
-                            f"• Beginner (1% / ₹1k): {q_beg} Qty\n"
-                            f"• Intermediate (1.5% / ₹1.5k): {q_int} Qty\n"
-                            f"• Pro (2% / ₹2k): {q_pro} Qty\n"
-                            f"• Target 1 (2:1): ₹{t1:.2f}\n\n"
-                            f"<b>IV. TradingView Pine Script</b>\n"
-                            f"<code>//@version=5\n"
-                            f"indicator(\"GTF Demand\", overlay=true)\n"
-                            f"plot({pl:.2f}, \"PL\", color=color.blue)\n"
-                            f"plot({dl:.2f}, \"DL\", color=color.red)\n"
-                            f"plot({t1:.2f}, \"Target\", color=color.green)</code>"
+                         msg = (
+                            "<b>🟢 GTF DEMAND ENGINE: " + ticker + "</b>\n\n"
+                            "• <b>CMP:</b> ₹" + str(round(cmp, 2)) + "\n"
+                            "• <b>Entry (PL):</b> ₹" + str(round(pl, 2)) + "\n"
+                            "• <b>Stop Loss (DL):</b> ₹" + str(round(dl, 2)) + "\n"
+                            "• <b>Target 1 (2:1):</b> ₹" + str(round(t1, 2)) + "\n\n"
+                            "• <b>Trend:</b> " + cross + "\n"
+                            "• <b>EMA 20:</b> ₹" + str(round(ema20, 2)) + "\n\n"
+                            "<b>Position Sizing (₹1 Lakh):</b>\n"
+                            "• Beginner (1%): " + str(q_beg) + " Qty\n"
+                            "• Pro (2%): " + str(q_pro) + " Qty"
                         )
                         send_telegram_alert(msg)
                         break
@@ -136,30 +123,17 @@ def evaluate_gtf_setup(ticker):
                         q_int = int(1500 / risk)
                         q_pro = int(2000 / risk)
 
-                        msg = (
-                            f"<b>🔴 GTF SUPPLY ENGINE: {ticker}</b>\n\n"
-                            f"<b>I. Zone Anatomy (RBD)</b>\n"
-                            f"• CMP: ₹{cmp:.2f}\n"
-                            f"• Proximal Line (Sell): ₹{pl:.2f}\n"
-                            f"• Distal Line (SL): ₹{dl:.2f}\n"
-                            f"• Status: Authentic Origin (Fresh)\n"
-                            f"• Closing Concept: Verified ✅\n\n"
-                            f"<b>II. Trend & Confluence</b>\n"
-                            f"• 20 EMA: ₹{ema20:.2f}\n"
-                            f"• 50 EMA: ₹{ema50:.2f}\n"
-                            f"• Alignment: {cross}\n\n"
-                            f"<b>III. Risk Calibration (₹1 Lakh)</b>\n"
-                            f"• Risk/Share: ₹{risk:.2f}\n"
-                            f"• Beginner (1% / ₹1k): {q_beg} Qty\n"
-                            f"• Intermediate (1.5% / ₹1.5k): {q_int} Qty\n"
-                            f"• Pro (2% / ₹2k): {q_pro} Qty\n"
-                            f"• Target 1 (2:1): ₹{t1:.2f}\n\n"
-                            f"<b>IV. TradingView Pine Script</b>\n"
-                            f"<code>//@version=5\n"
-                            f"indicator(\"GTF Supply\", overlay=true)\n"
-                            f"plot({pl:.2f}, \"PL\", color=color.blue)\n"
-                            f"plot({dl:.2f}, \"DL\", color=color.red)\n"
-                            f"plot({t1:.2f}, \"Target\", color=color.green)</code>"
+                         msg = (
+                            "<b>🔴 GTF SUPPLY ENGINE: " + ticker + "</b>\n\n"
+                            "• <b>CMP:</b> ₹" + str(round(cmp, 2)) + "\n"
+                            "• <b>Entry (PL):</b> ₹" + str(round(pl, 2)) + "\n"
+                            "• <b>Stop Loss (DL):</b> ₹" + str(round(dl, 2)) + "\n"
+                            "• <b>Target 1 (2:1):</b> ₹" + str(round(t1, 2)) + "\n\n"
+                            "• <b>Trend:</b> " + cross + "\n"
+                            "• <b>EMA 20:</b> ₹" + str(round(ema20, 2)) + "\n\n"
+                            "<b>Position Sizing (₹1 Lakh):</b>\n"
+                            "• Beginner (1%): " + str(q_beg) + " Qty\n"
+                            "• Pro (2%): " + str(q_pro) + " Qty"
                         )
                         send_telegram_alert(msg)
                         break
