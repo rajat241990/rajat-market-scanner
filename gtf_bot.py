@@ -58,7 +58,7 @@ def is_base(candle):
 def evaluate_gtf_setup(ticker):
     try:
         stock = yf.Ticker(ticker)
-        df = stock.history(period="6mo", interval="1d")
+        df = stock.history(period="5y", interval="1mo")
         if df.empty or len(df) < 50:
             return
 
