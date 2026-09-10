@@ -1,7 +1,6 @@
  import os
 import requests
 import yfinance as yf
-import pandas as pd
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -32,26 +31,23 @@ def send_telegram_alert(message):
         print("Telegram secrets missing!")
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML"
-    }
+    payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
     try:
-        res = requests.post(url, json=payload, timeout=10)
-        print(f"Alert sent. Status: {res.status_code}")
+        requests.post(url, json=payload, timeout=10)
     except Exception as e:
-        print(f"Failed to send Telegram message: {e}")
+        print(f"Telegram connection error: {e}")
 
 def is_exciting(candle):
     rng = float(candle['High']) - float(candle['Low'])
-    if rng == 0: return False
+    if rng == 0:
+        return False
     body = abs(float(candle['Close']) - float(candle['Open']))
     return (body / rng) > 0.50
 
 def is_base(candle):
     rng = float(candle['High']) - float(candle['Low'])
-    if rng == 0: return False
+    if rng == 0:
+        return False
     body = abs(float(candle['Close']) - float(candle['Open']))
     return (body / rng) <= 0.50
 
@@ -64,12 +60,12 @@ def evaluate_gtf_setup(ticker):
 
         df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
         df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
-        
+
         cmp = float(df['Close'].iloc[-1])
         ema20 = float(df['EMA20'].iloc[-1])
         ema50 = float(df['EMA50'].iloc[-1])
         cross = "Golden Cross (Bullish)" if ema20 > ema50 else "Death Cross (Bearish)"
-        
+
         for i in range(len(df) - 4, 3, -1):
             leg_in = df.iloc[i-1]
             base = df.iloc[i]
@@ -79,7 +75,7 @@ def evaluate_gtf_setup(ticker):
             out_open, out_close, out_high, out_low = float(leg_out['Open']), float(leg_out['Close']), float(leg_out['High']), float(leg_out['Low'])
             base_open, base_close = float(base['Open']), float(base['Close'])
             base_low, base_high = float(base['Low']), float(base['High'])
-            
+
             # Demand Reversal (DBR)
             if in_close < in_open and is_base(base) and out_close > out_open and is_exciting(leg_out):
                 if out_close > in_high:
@@ -88,25 +84,39 @@ def evaluate_gtf_setup(ticker):
                     subs_lows = df['Low'].iloc[i+2:].astype(float)
                     if not (subs_lows <= pl).any() and cmp >= pl and ((cmp - pl) / pl) <= 0.015:
                         risk = pl - dl
-                        if risk <= 0: continue
+                        if risk <= 0:
+                            continue
                         t1 = pl + (2 * risk)
                         q_beg = int(1000 / risk)
                         q_int = int(1500 / risk)
                         q_pro = int(2000 / risk)
 
-                         msg = (
-                            "<b>🟢 GTF DEMAND ENGINE: " + ticker + "</b>\n\n"
-                            "• <b>CMP:</b> ₹" + str(round(cmp, 2)) + "\n"
-                            "• <b>Entry (PL):</b> ₹" + str(round(pl, 2)) + "\n"
-                            "• <b>Stop Loss (DL):</b> ₹" + str(round(dl, 2)) + "\n"
-                            "• <b>Target 1 (2:1):</b> ₹" + str(round(t1, 2)) + "\n\n"
-                            "• <b>Trend:</b> " + cross + "\n"
-                            "• <b>EMA 20:</b> ₹" + str(round(ema20, 2)) + "\n\n"
-                            "<b>Position Sizing (₹1 Lakh):</b>\n"
-                            "• Beginner (1%): " + str(q_beg) + " Qty\n"
-                            "• Pro (2%): " + str(q_pro) + " Qty"
-                        )
-                        send_telegram_alert(msg)
+                        lines = [
+                            f"<b>🟢 GTF DEMAND ENGINE: {ticker}</b>",
+                            "",
+                            "<b>I. Zone Anatomy (DBR)</b>",
+                            f"• CMP: ₹{cmp:.2f}",
+                            f"• Proximal Line (Entry): ₹{pl:.2f}",
+                            f"• Distal Line (SL): ₹{dl:.2f}",
+                            "• Status: Authentic Origin (Fresh)",
+                            "• Closing Concept: Verified ✅",
+                            "",
+                            "<b>II. Trend & Confluence</b>",
+                            f"• 20 EMA: ₹{ema20:.2f}",
+                            f"• 50 EMA: ₹{ema50:.2f}",
+                            f"• Momentum: {cross}",
+                            "",
+                            "<b>III. Risk Calibration (₹1 Lakh Capital)</b>",
+                            f"• Risk/Share: ₹{risk:.2f}",
+                            f"• Beginner (1% / ₹1k): {q_beg} Qty",
+                            f"• Intermediate (1.5% / ₹1.5k): {q_int} Qty",
+                            f"• Pro (2% / ₹2k): {q_pro} Qty",
+                            f"• Target 1 (2:1): ₹{t1:.2f}",
+                            "",
+                            "<b>IV. Execution Parameters</b>",
+                            f"<code>Entry={pl:.2f} | SL={dl:.2f} | Target={t1:.2f}</code>"
+                        ]
+                        send_telegram_alert("\n".join(lines))
                         break
 
             # Supply Reversal (RBD)
@@ -117,25 +127,39 @@ def evaluate_gtf_setup(ticker):
                     subs_highs = df['High'].iloc[i+2:].astype(float)
                     if not (subs_highs >= pl).any() and cmp <= pl and ((pl - cmp) / pl) <= 0.015:
                         risk = dl - pl
-                        if risk <= 0: continue
+                        if risk <= 0:
+                            continue
                         t1 = pl - (2 * risk)
                         q_beg = int(1000 / risk)
                         q_int = int(1500 / risk)
                         q_pro = int(2000 / risk)
 
-                         msg = (
-                            "<b>🔴 GTF SUPPLY ENGINE: " + ticker + "</b>\n\n"
-                            "• <b>CMP:</b> ₹" + str(round(cmp, 2)) + "\n"
-                            "• <b>Entry (PL):</b> ₹" + str(round(pl, 2)) + "\n"
-                            "• <b>Stop Loss (DL):</b> ₹" + str(round(dl, 2)) + "\n"
-                            "• <b>Target 1 (2:1):</b> ₹" + str(round(t1, 2)) + "\n\n"
-                            "• <b>Trend:</b> " + cross + "\n"
-                            "• <b>EMA 20:</b> ₹" + str(round(ema20, 2)) + "\n\n"
-                            "<b>Position Sizing (₹1 Lakh):</b>\n"
-                            "• Beginner (1%): " + str(q_beg) + " Qty\n"
-                            "• Pro (2%): " + str(q_pro) + " Qty"
-                        )
-                        send_telegram_alert(msg)
+                        lines = [
+                            f"<b>🔴 GTF SUPPLY ENGINE: {ticker}</b>",
+                            "",
+                            "<b>I. Zone Anatomy (RBD)</b>",
+                            f"• CMP: ₹{cmp:.2f}",
+                            f"• Proximal Line (Sell): ₹{pl:.2f}",
+                            f"• Distal Line (SL): ₹{dl:.2f}",
+                            "• Status: Authentic Origin (Fresh)",
+                            "• Closing Concept: Verified ✅",
+                            "",
+                            "<b>II. Trend & Confluence</b>",
+                            f"• 20 EMA: ₹{ema20:.2f}",
+                            f"• 50 EMA: ₹{ema50:.2f}",
+                            f"• Momentum: {cross}",
+                            "",
+                            "<b>III. Risk Calibration (₹1 Lakh Capital)</b>",
+                            f"• Risk/Share: ₹{risk:.2f}",
+                            f"• Beginner (1% / ₹1k): {q_beg} Qty",
+                            f"• Intermediate (1.5% / ₹1.5k): {q_int} Qty",
+                            f"• Pro (2% / ₹2k): {q_pro} Qty",
+                            f"• Target 1 (2:1): ₹{t1:.2f}",
+                            "",
+                            "<b>IV. Execution Parameters</b>",
+                            f"<code>Entry={pl:.2f} | SL={dl:.2f} | Target={t1:.2f}</code>"
+                        ]
+                        send_telegram_alert("\n".join(lines))
                         break
     except Exception as e:
         print(f"Error checking {ticker}: {e}")
