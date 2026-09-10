@@ -1,10 +1,9 @@
-name: GTF Market Scanner
+ name: GTF Market Scanner
 
 on:
   schedule:
-    # Runs every 15 mins between 03:45 UTC and 10:00 UTC, Mon-Fri (Indian Market Hours)
     - cron: '45/15 3-9 * * 1-5'
-  workflow_dispatch: # Enables manual 1-click test runs
+  workflow_dispatch:
 
 jobs:
   scan:
@@ -22,9 +21,10 @@ jobs:
         run: |
           pip install yfinance requests pandas
 
-      - name: Execute GTF Scanner
+      - name: Clean and Execute GTF Scanner
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
+          python -c "with open('gtf_bot.py', 'r', encoding='utf-8') as f: c = f.read().replace('\xa0', ' '); open('gtf_bot.py', 'w', encoding='utf-8').write(c)"
           python gtf_bot.py
