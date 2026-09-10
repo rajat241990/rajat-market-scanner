@@ -102,6 +102,111 @@ def evaluate_gtf_setup(ticker):
             else:
                 itf_trend = "Bearish (Below 20 EMA)"
 
+        # ... existing code ...
+            # LTF Supply Reversal (RBD)
+            if in_close > in_open and is_base(base) and out_close < out_open and is_exciting(leg_out):
+                if out_close < in_low:
+                    pl = min(base_open, base_close)
+                    dl = max(in_high, base_high, out_high)
+                    subs_highs = df['High'].iloc[i+2:].astype(float)
+                    if not (subs_highs >= pl).any() and cmp <= pl and ((pl - cmp) / pl) <= 0.015:
+                        risk = dl - pl
+                        if risk <= 0: continue
+                        t1 = pl - (2 * risk)
+                        q_beg = int(1000 / risk)
+                        q_pro = int(2000 / risk)
+
+                        msg = (
+                            "🔴 GTF MTFA SUPPLY ALERT: " + ticker + "\n\n"
+                            "I. MULTI-TIMEFRAME ALIGNMENT\n"
+                            "• HTF Curve: " + curve_loc + "\n"
+                            "• HTF Supply: Rs " + htf_sup_str + "\n"
+                            "• HTF Demand: Rs " + htf_dem_str + "\n"
+                            "• ITF Trend: " + itf_trend + "\n\n"
+                            "II. LTF EXECUTION ZONE\n"
+                            "• CMP: Rs " + str(round(cmp, 2)) + "\n"
+                            "• Entry (PL): Rs " + str(round(pl, 2)) + "\n"
+                            "• Stop Loss (DL): Rs " + str(round(dl, 2)) + "\n\n"
+                            "III. POSITION SIZING (Rs 1 Lakh)\n"
+                            "• Target 1: Rs " + str(round(t1, 2)) + "\n"
+                            "• Beginner (1%): " + str(q_beg) + " Qty\n"
+                            "• Pro (2%): " + str(q_pro) + " Qty"
+                        )
+                        send_telegram_alert(msg)
+                        break
+
+            # LTF Demand Continuous (RBR)
+            if in_close > in_open and is_base(base) and out_close > out_open and is_exciting(leg_out):
+                if out_close > in_high:
+                    pl = max(base_open, base_close)
+                    # Exceptional Marking for Continuous: Ignore leg-in wick
+                    dl = min(base_low, out_low) 
+                    subs_lows = df['Low'].iloc[i+2:].astype(float)
+                    if not (subs_lows <= pl).any() and cmp >= pl and ((cmp - pl) / pl) <= 0.015:
+                        risk = pl - dl
+                        if risk <= 0: continue
+                        t1 = pl + (2 * risk)
+                        q_beg = int(1000 / risk)
+                        q_pro = int(2000 / risk)
+
+                        msg = (
+                            "🟢 GTF MTFA DEMAND ALERT (RBR): " + ticker + "\n\n"
+                            "I. MULTI-TIMEFRAME ALIGNMENT\n"
+                            "• HTF Curve: " + curve_loc + "\n"
+                            "• HTF Supply: Rs " + htf_sup_str + "\n"
+                            "• HTF Demand: Rs " + htf_dem_str + "\n"
+                            "• ITF Trend: " + itf_trend + "\n\n"
+                            "II. LTF EXECUTION ZONE\n"
+                            "• CMP: Rs " + str(round(cmp, 2)) + "\n"
+                            "• Entry (PL): Rs " + str(round(pl, 2)) + "\n"
+                            "• Stop Loss (DL): Rs " + str(round(dl, 2)) + "\n\n"
+                            "III. POSITION SIZING (Rs 1 Lakh)\n"
+                            "• Target 1: Rs " + str(round(t1, 2)) + "\n"
+                            "• Beginner (1%): " + str(q_beg) + " Qty\n"
+                            "• Pro (2%): " + str(q_pro) + " Qty"
+                        )
+                        send_telegram_alert(msg)
+                        break
+
+            # LTF Supply Continuous (DBD)
+            if in_close < in_open and is_base(base) and out_close < out_open and is_exciting(leg_out):
+                if out_close < in_low:
+                    pl = min(base_open, base_close)
+                    # Exceptional Marking for Continuous: Ignore leg-in wick
+                    dl = max(base_high, out_high)
+                    subs_highs = df['High'].iloc[i+2:].astype(float)
+                    if not (subs_highs >= pl).any() and cmp <= pl and ((pl - cmp) / pl) <= 0.015:
+                        risk = dl - pl
+                        if risk <= 0: continue
+                        t1 = pl - (2 * risk)
+                        q_beg = int(1000 / risk)
+                        q_pro = int(2000 / risk)
+
+                        msg = (
+                            "🔴 GTF MTFA SUPPLY ALERT (DBD): " + ticker + "\n\n"
+                            "I. MULTI-TIMEFRAME ALIGNMENT\n"
+                            "• HTF Curve: " + curve_loc + "\n"
+                            "• HTF Supply: Rs " + htf_sup_str + "\n"
+                            "• HTF Demand: Rs " + htf_dem_str + "\n"
+                            "• ITF Trend: " + itf_trend + "\n\n"
+                            "II. LTF EXECUTION ZONE\n"
+                            "• CMP: Rs " + str(round(cmp, 2)) + "\n"
+                            "• Entry (PL): Rs " + str(round(pl, 2)) + "\n"
+                            "• Stop Loss (DL): Rs " + str(round(dl, 2)) + "\n\n"
+                            "III. POSITION SIZING (Rs 1 Lakh)\n"
+                            "• Target 1: Rs " + str(round(t1, 2)) + "\n"
+                            "• Beginner (1%): " + str(q_beg) + " Qty\n"
+                            "• Pro (2%): " + str(q_pro) + " Qty"
+                        )
+                        send_telegram_alert(msg)
+                        break
+    except Exception as e:
+# ... existing code ...
+```
+
+### Key Additions Explained:
+1. **RBR & DBD Logic:** The code now properly looks for Rally (`in_close > in_open`) - Base - Rally (`out_close > out_open`) and Drop - Base - Drop combinations.
+2. **Proper Distal Lines:** Notice that for `dl` in both RBR and DBD blocks, `in_low` and `in_high` are completely omitted from the `min()` and `max()` functions, satisfying the GTF exceptional marking rules.
         # 3. LTF (Daily) - 1 Year Data for Execution Zone
         df = stock.history(period="1y", interval="1d")
         if df.empty or len(df) < 50:
