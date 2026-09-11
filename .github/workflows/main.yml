@@ -20,7 +20,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install yfinance requests pandas
+          pip install yfinance requests pandas numpy
 
       - name: Clean and Execute GTF Scanner
         env:
