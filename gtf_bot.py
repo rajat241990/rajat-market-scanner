@@ -102,22 +102,44 @@ def evaluate_gtf_setup(ticker):
             else:
                 itf_trend = "Bearish (Below 20 EMA)"
 
-        # ... existing code ...
-            # LTF Supply Reversal (RBD)
-            if in_close > in_open and is_base(base) and out_close < out_open and is_exciting(leg_out):
-                if out_close < in_low:
-                    pl = min(base_open, base_close)
-                    dl = max(in_high, base_high, out_high)
-                    subs_highs = df['High'].iloc[i+2:].astype(float)
-                    if not (subs_highs >= pl).any() and cmp <= pl and ((pl - cmp) / pl) <= 0.015:
-                        risk = dl - pl
+        # 3. LTF (Daily) - 1 Year Data for Execution Zone
+        df = stock.history(period="1y", interval="1d")
+        if df.empty or len(df) < 50:
+            return
+
+        df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
+        df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
+
+        cmp = float(df['Close'].iloc[-1])
+        ema20 = float(df['EMA20'].iloc[-1])
+        ema50 = float(df['EMA50'].iloc[-1])
+        cross = "Golden Cross" if ema20 > ema50 else "Death Cross"
+
+        for i in range(len(df) - 4, 3, -1):
+            leg_in = df.iloc[i-1]
+            base = df.iloc[i]
+            leg_out = df.iloc[i+1]
+
+            in_open, in_close, in_high, in_low = float(leg_in['Open']), float(leg_in['Close']), float(leg_in['High']), float(leg_in['Low'])
+            out_open, out_close, out_high, out_low = float(leg_out['Open']), float(leg_out['Close']), float(leg_out['High']), float(leg_out['Low'])
+            base_open, base_close = float(base['Open']), float(base['Close'])
+            base_low, base_high = float(base['Low']), float(base['High'])
+
+            # LTF Demand Reversal (DBR: Drop - Base - Rally)
+            if in_close < in_open and is_base(base) and out_close > out_open and is_exciting(leg_out):
+                if out_close > in_high:
+                    pl = max(base_open, base_close)
+                    dl = min(in_low, base_low, out_low)
+                    subs_lows = df['Low'].iloc[i+2:].astype(float)
+                    if not (subs_lows <= pl).any() and cmp >= pl and ((cmp - pl) / pl) <= 0.015:
+                        risk = pl - dl
                         if risk <= 0: continue
-                        t1 = pl - (2 * risk)
+                        t1 = pl + (2 * risk)
                         q_beg = int(1000 / risk)
                         q_pro = int(2000 / risk)
 
                         msg = (
-                            "🔴 GTF MTFA SUPPLY ALERT: " + ticker + "\n\n"
+                            "🟢 GTF MTFA DEMAND ALERT (DBR): " + ticker + "\n\n"
                             "I. MULTI-TIMEFRAME ALIGNMENT\n"
                             "• HTF Curve: " + curve_loc + "\n"
                             "• HTF Supply: Rs " + htf_sup_str + "\n"
@@ -135,7 +157,39 @@ def evaluate_gtf_setup(ticker):
                         send_telegram_alert(msg)
                         break
 
-            # LTF Demand Continuous (RBR)
+            # LTF Supply Reversal (RBD: Rally - Base - Drop)
+            if in_close > in_open and is_base(base) and out_close < out_open and is_exciting(leg_out):
+                if out_close < in_low:
+                    pl = min(base_open, base_close)
+                    dl = max(in_high, base_high, out_high)
+                    subs_highs = df['High'].iloc[i+2:].astype(float)
+                    if not (subs_highs >= pl).any() and cmp <= pl and ((pl - cmp) / pl) <= 0.015:
+                        risk = dl - pl
+                        if risk <= 0: continue
+                        t1 = pl - (2 * risk)
+                        q_beg = int(1000 / risk)
+                        q_pro = int(2000 / risk)
+
+                        msg = (
+                            "🔴 GTF MTFA SUPPLY ALERT (RBD): " + ticker + "\n\n"
+                            "I. MULTI-TIMEFRAME ALIGNMENT\n"
+                            "• HTF Curve: " + curve_loc + "\n"
+                            "• HTF Supply: Rs " + htf_sup_str + "\n"
+                            "• HTF Demand: Rs " + htf_dem_str + "\n"
+                            "• ITF Trend: " + itf_trend + "\n\n"
+                            "II. LTF EXECUTION ZONE\n"
+                            "• CMP: Rs " + str(round(cmp, 2)) + "\n"
+                            "• Entry (PL): Rs " + str(round(pl, 2)) + "\n"
+                            "• Stop Loss (DL): Rs " + str(round(dl, 2)) + "\n\n"
+                            "III. POSITION SIZING (Rs 1 Lakh)\n"
+                            "• Target 1: Rs " + str(round(t1, 2)) + "\n"
+                            "• Beginner (1%): " + str(q_beg) + " Qty\n"
+                            "• Pro (2%): " + str(q_pro) + " Qty"
+                        )
+                        send_telegram_alert(msg)
+                        break
+
+            # LTF Demand Continuous (RBR: Rally - Base - Rally)
             if in_close > in_open and is_base(base) and out_close > out_open and is_exciting(leg_out):
                 if out_close > in_high:
                     pl = max(base_open, base_close)
@@ -168,7 +222,7 @@ def evaluate_gtf_setup(ticker):
                         send_telegram_alert(msg)
                         break
 
-            # LTF Supply Continuous (DBD)
+            # LTF Supply Continuous (DBD: Drop - Base - Drop)
             if in_close < in_open and is_base(base) and out_close < out_open and is_exciting(leg_out):
                 if out_close < in_low:
                     pl = min(base_open, base_close)
@@ -201,98 +255,7 @@ def evaluate_gtf_setup(ticker):
                         send_telegram_alert(msg)
                         break
     except Exception as e:
-# ... existing code ...
-
-### Key Additions Explained:
-1. **RBR & DBD Logic:** The code now properly looks for Rally (`in_close > in_open`) - Base - Rally (`out_close > out_open`) and Drop - Base - Drop combinations.
-2. **Proper Distal Lines:** Notice that for `dl` in both RBR and DBD blocks, `in_low` and `in_high` are completely omitted from the `min()` and `max()` functions, satisfying the GTF exceptional marking rules.
-        # 3. LTF (Daily) - 1 Year Data for Execution Zone
-        df = stock.history(period="1y", interval="1d")
-        if df.empty or len(df) < 50:
-            return
-
-        df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
-        df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
-
-        cmp = float(df['Close'].iloc[-1])
-        ema20 = float(df['EMA20'].iloc[-1])
-        ema50 = float(df['EMA50'].iloc[-1])
-        cross = "Golden Cross" if ema20 > ema50 else "Death Cross"
-
-        for i in range(len(df) - 4, 3, -1):
-            leg_in = df.iloc[i-1]
-            base = df.iloc[i]
-            leg_out = df.iloc[i+1]
-
-            in_open, in_close, in_high, in_low = float(leg_in['Open']), float(leg_in['Close']), float(leg_in['High']), float(leg_in['Low'])
-            out_open, out_close, out_high, out_low = float(leg_out['Open']), float(leg_out['Close']), float(leg_out['High']), float(leg_out['Low'])
-            base_open, base_close = float(base['Open']), float(base['Close'])
-            base_low, base_high = float(base['Low']), float(base['High'])
-
-            # LTF Demand Reversal (DBR)
-            if in_close < in_open and is_base(base) and out_close > out_open and is_exciting(leg_out):
-                if out_close > in_high:
-                    pl = max(base_open, base_close)
-                    dl = min(in_low, base_low, out_low)
-                    subs_lows = df['Low'].iloc[i+2:].astype(float)
-                    if not (subs_lows <= pl).any() and cmp >= pl and ((cmp - pl) / pl) <= 0.015:
-                        risk = pl - dl
-                        if risk <= 0: continue
-                        t1 = pl + (2 * risk)
-                        q_beg = int(1000 / risk)
-                        q_pro = int(2000 / risk)
-
-                        msg = (
-                            "🟢 GTF MTFA DEMAND ALERT: " + ticker + "\n\n"
-                            "I. MULTI-TIMEFRAME ALIGNMENT\n"
-                            "• HTF Curve: " + curve_loc + "\n"
-                            "• HTF Supply: Rs " + htf_sup_str + "\n"
-                            "• HTF Demand: Rs " + htf_dem_str + "\n"
-                            "• ITF Trend: " + itf_trend + "\n\n"
-                            "II. LTF EXECUTION ZONE\n"
-                            "• CMP: Rs " + str(round(cmp, 2)) + "\n"
-                            "• Entry (PL): Rs " + str(round(pl, 2)) + "\n"
-                            "• Stop Loss (DL): Rs " + str(round(dl, 2)) + "\n\n"
-                            "III. POSITION SIZING (Rs 1 Lakh)\n"
-                            "• Target 1: Rs " + str(round(t1, 2)) + "\n"
-                            "• Beginner (1%): " + str(q_beg) + " Qty\n"
-                            "• Pro (2%): " + str(q_pro) + " Qty"
-                        )
-                        send_telegram_alert(msg)
-                        break
-
-            # LTF Supply Reversal (RBD)
-            if in_close > in_open and is_base(base) and out_close < out_open and is_exciting(leg_out):
-                if out_close < in_low:
-                    pl = min(base_open, base_close)
-                    dl = max(in_high, base_high, out_high)
-                    subs_highs = df['High'].iloc[i+2:].astype(float)
-                    if not (subs_highs >= pl).any() and cmp <= pl and ((pl - cmp) / pl) <= 0.015:
-                        risk = dl - pl
-                        if risk <= 0: continue
-                        t1 = pl - (2 * risk)
-                        q_beg = int(1000 / risk)
-                        q_pro = int(2000 / risk)
-
-                        msg = (
-                            "🔴 GTF MTFA SUPPLY ALERT: " + ticker + "\n\n"
-                            "I. MULTI-TIMEFRAME ALIGNMENT\n"
-                            "• HTF Curve: " + curve_loc + "\n"
-                            "• HTF Supply: Rs " + htf_sup_str + "\n"
-                            "• HTF Demand: Rs " + htf_dem_str + "\n"
-                            "• ITF Trend: " + itf_trend + "\n\n"
-                            "II. LTF EXECUTION ZONE\n"
-                            "• CMP: Rs " + str(round(cmp, 2)) + "\n"
-                            "• Entry (PL): Rs " + str(round(pl, 2)) + "\n"
-                            "• Stop Loss (DL): Rs " + str(round(dl, 2)) + "\n\n"
-                            "III. POSITION SIZING (Rs 1 Lakh)\n"
-                            "• Target 1: Rs " + str(round(t1, 2)) + "\n"
-                            "• Beginner (1%): " + str(q_beg) + " Qty\n"
-                            "• Pro (2%): " + str(q_pro) + " Qty"
-                        )
-                        send_telegram_alert(msg)
-                        break
-    except Exception as e:
+        # Ignore errors (like missing data for a ticker) and continue to the next one
         pass
 
 if __name__ == "__main__":
