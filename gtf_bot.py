@@ -1,4 +1,4 @@
-import os
+ import os
 import requests
 import numpy as np
 import pandas as pd
@@ -9,7 +9,7 @@ import yfinance as yf
 # ==========================================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-RISK_PER_TRADE = 1000  # Default risk in INR (1% of 1 Lakh capital)
+RISK_PER_TRADE = 1000  # Default risk in INR
 
 WATCHLIST = [
     "ABB.NS", "ADANIENT.NS", "ADANIGREEN.NS", "ADANIPORTS.NS", "ADANIPOWER.NS", "ATGL.NS", 
@@ -44,13 +44,8 @@ def send_telegram_alert(message):
     except Exception as e:
         print(f"Telegram Communication Error: {e}")
 
-# ==========================================
-# MICROSTRUCTURE CANDLE CLASSIFICATION
-# ==========================================
 def classify_candles(df):
-    """
-    Vectorized classification based on the 50% Body-to-Range rule.
-    """
+    """Vectorized classification based on the 50% Body-to-Range rule."""
     df = df.copy()
     df['Range'] = df['High'] - df['Low']
     df['Body'] = abs(df['Close'] - df['Open'])
@@ -62,23 +57,18 @@ def classify_candles(df):
     df['Color'] = np.where(df['Close'] > df['Open'], 'Green', 'Red')
     return df
 
-# ==========================================
-# GTF COMPLIANT ZONE SCANNER (SOP v4.2)
-# ==========================================
 def detect_zones(df, zone_type="Demand"):
     """
-    Detects authentic Supply/Demand zones strictly below (Demand) or above (Supply) CMP.
-    Applies Exceptional Marking, Closing Concept, and GTF 7-Point Quality Scoring.
+    Stricter zone scanner limiting base candles to max 3 
+    and enforcing high-quality structural standards.
     """
     zones = []
     n = len(df)
     cmp = float(df['Close'].iloc[-1])
     
-    # Iterate backwards to find historical zones relative to CMP
-    for i in range(n - 2, 6, -1):
+    for i in range(n - 2, 4, -1):
         leg_out = df.iloc[i+1]
         
-        # 1. Leg-Out Check
         if not leg_out['Is_Exciting']:
             continue
         if zone_type == "Demand" and leg_out['Color'] != 'Green':
@@ -86,20 +76,19 @@ def detect_zones(df, zone_type="Demand"):
         if zone_type == "Supply" and leg_out['Color'] != 'Red':
             continue
 
-        # 2. Base Candle Aggregation (1 to 5 bases, 1-3 optimal)
+        # Strict Base Aggregation: Max 3 bases for institutional explosion
         base_candles = []
         base_indices = []
-        for j in range(i, max(0, i - 6), -1):
+        for j in range(i, max(0, i - 4), -1):
             if df.iloc[j]['Is_Base']:
                 base_candles.append(df.iloc[j])
                 base_indices.append(j)
             else:
                 break
                 
-        if len(base_candles) == 0 or len(base_candles) > 5:
+        if len(base_candles) == 0 or len(base_candles) > 3:
             continue
             
-        # 3. Leg-In Validation
         leg_in_idx = base_indices[-1] - 1
         if leg_in_idx < 0:
             continue
@@ -108,7 +97,6 @@ def detect_zones(df, zone_type="Demand"):
         if not leg_in['Is_Exciting']:
             continue
 
-        # 4. Closing Concept Verification
         leg_in_body_high = max(leg_in['Open'], leg_in['Close'])
         leg_in_body_low = min(leg_in['Open'], leg_in['Close'])
         
@@ -117,50 +105,30 @@ def detect_zones(df, zone_type="Demand"):
         if zone_type == "Supply" and leg_out['Close'] >= leg_in_body_low:
             continue
 
-        # Pattern Type
+        pattern = ""
         if zone_type == "Demand":
             pattern = "DBR" if leg_in['Color'] == 'Red' else "RBR"
         else:
             pattern = "RBD" if leg_in['Color'] == 'Green' else "DBD"
 
-        # 5. Boundary Line Marking Standards
         base_df = pd.DataFrame(base_candles)
         if zone_type == "Demand":
-            # Proximal: Highest body of base candles
             pl = base_df[['Open', 'Close']].max().max()
-            
-            # Demand MUST be strictly below CMP
             if pl >= cmp:
                 continue
-                
             base_min_wick = base_df['Low'].min()
             out_min_wick = leg_out['Low']
             in_min_wick = leg_in['Low']
-            
-            # Exceptional Marking: Reversal vs Continuation
-            if pattern == "DBR":
-                dl = min(in_min_wick, base_min_wick, out_min_wick)
-            else:
-                dl = min(base_min_wick, out_min_wick)
+            dl = min(in_min_wick, base_min_wick, out_min_wick) if pattern == "DBR" else min(base_min_wick, out_min_wick)
         else:
-            # Proximal: Lowest body of base candles
             pl = base_df[['Open', 'Close']].min().min()
-            
-            # Supply MUST be strictly above CMP
             if pl <= cmp:
                 continue
-                
             base_max_wick = base_df['High'].max()
             out_max_wick = leg_out['High']
             in_max_wick = leg_in['High']
-            
-            # Exceptional Marking: Reversal vs Continuation
-            if pattern == "RBD":
-                dl = max(in_max_wick, base_max_wick, out_max_wick)
-            else:
-                dl = max(base_max_wick, out_max_wick)
+            dl = max(in_max_wick, base_max_wick, out_max_wick) if pattern == "RBD" else max(base_max_wick, out_max_wick)
 
-        # 6. Freshness and Retest Verification
         post_zone_df = df.iloc[i+2:]
         is_fresh = True
         is_breached = False
@@ -180,30 +148,24 @@ def detect_zones(df, zone_type="Demand"):
         if is_breached or not is_fresh:
             continue
 
-        # 7. GTF Quality Scoring (7-Point Base)
-        score = 3.0  # Freshness
-        score += 2.0 if (len(df) > i+2 and df.iloc[i+2]['Is_Exciting']) else 1.0  # Leg-out power
-        score += 2.0 if len(base_candles) <= 3 else 1.0  # Time at base
+        # Strict Quality Scoring Weights
+        score = 3.0
+        score += 2.0 if (len(df) > i+2 and df.iloc[i+2]['Is_Exciting']) else 0.0
+        score += 2.0 if len(base_candles) == 1 else (1.0 if len(base_candles) == 2 else 0.5)
         
         zones.append({
             'Pattern': pattern,
             'PL': round(float(pl), 2),
             'DL': round(float(dl), 2),
             'Base_Count': len(base_candles),
-            'Score': score,
+            'Score': round(score, 1),
             'Index': i
         })
         break
 
     return zones[0] if zones else None
 
-# ==========================================
-# MULTI-TIMEFRAME ANALYSIS (MTFA)
-# ==========================================
 def evaluate_mtfa(ticker):
-    """
-    Orchestrates MTFA workflow under GTF SOP v4.2 rules.
-    """
     try:
         stock = yf.Ticker(ticker)
         
@@ -215,7 +177,7 @@ def evaluate_mtfa(ticker):
         htf_demand = detect_zones(df_htf, "Demand")
         htf_supply = detect_zones(df_htf, "Supply")
         
-        curve_loc = "Equilibrium (Follow Trend)"
+        curve_loc = "Equilibrium"
         cmp = float(df_htf['Close'].iloc[-1])
         
         if htf_demand and htf_supply:
@@ -245,21 +207,23 @@ def evaluate_mtfa(ticker):
         ltf_demand = detect_zones(df_ltf, "Demand")
         ltf_supply = detect_zones(df_ltf, "Supply")
         
-        # Execution Evaluation
-        if ltf_demand and curve_loc != "High (Sell Preferred)" and itf_trend == "Bullish":
+        # STRICT DEMAND EXECUTION: Curve MUST be Low, Trend Bullish, Score >= 6.0, Proximity within 1.5%
+        if ltf_demand and curve_loc == "Low (Buy Preferred)" and itf_trend == "Bullish":
             pl, dl = ltf_demand['PL'], ltf_demand['DL']
             risk = round(pl - dl, 2)
-            if risk > 0 and ltf_demand['Score'] >= 5.0:
+            
+            # Proximity check: Only alert if CMP is within 1.5% of the proximal line
+            if pl <= cmp <= pl * 1.015 and risk > 0 and ltf_demand['Score'] >= 6.0:
                 qty = int(RISK_PER_TRADE / risk)
                 entry = round(pl + (risk * 0.05), 2)
                 sl = round(dl - (risk * 0.05), 2)
                 target = round(entry + (2 * (entry - sl)), 2)
                 
                 msg = (
-                    f"🟢 <b>GTF MTFA DEMAND ALERT ({ltf_demand['Pattern']})</b>: {ticker}\n\n"
+                    f"🟢 <b>STRICT GTF DEMAND ALERT ({ltf_demand['Pattern']})</b>: {ticker}\n\n"
                     f"<b>I. MULTI-TIMEFRAME ALIGNMENT</b>\n"
                     f"• HTF Curve: {curve_loc}\n"
-                    f"• ITF Trend: {itf_trend} (Relative to 20 EMA)\n\n"
+                    f"• ITF Trend: {itf_trend} (Above 20 EMA)\n\n"
                     f"<b>II. LTF EXECUTION ZONE</b>\n"
                     f"• CMP: Rs {round(cmp, 2)}\n"
                     f"• Score: {ltf_demand['Score']}/7.0\n"
@@ -272,20 +236,23 @@ def evaluate_mtfa(ticker):
                 )
                 send_telegram_alert(msg)
 
-        if ltf_supply and curve_loc != "Low (Buy Preferred)" and itf_trend == "Bearish":
+        # STRICT SUPPLY EXECUTION: Curve MUST be High, Trend Bearish, Score >= 6.0, Proximity within 1.5%
+        if ltf_supply and curve_loc == "High (Sell Preferred)" and itf_trend == "Bearish":
             pl, dl = ltf_supply['PL'], ltf_supply['DL']
             risk = round(dl - pl, 2)
-            if risk > 0 and ltf_supply['Score'] >= 5.0:
+            
+            # Proximity check: Only alert if CMP is within 1.5% below the proximal line
+            if pl * 0.985 <= cmp <= pl and risk > 0 and ltf_supply['Score'] >= 6.0:
                 qty = int(RISK_PER_TRADE / risk)
                 entry = round(pl - (risk * 0.05), 2)
                 sl = round(dl + (risk * 0.05), 2)
                 target = round(entry - (2 * (sl - entry)), 2)
                 
                 msg = (
-                    f"🔴 <b>GTF MTFA SUPPLY ALERT ({ltf_supply['Pattern']})</b>: {ticker}\n\n"
+                    f"🔴 <b>STRICT GTF SUPPLY ALERT ({ltf_supply['Pattern']})</b>: {ticker}\n\n"
                     f"<b>I. MULTI-TIMEFRAME ALIGNMENT</b>\n"
                     f"• HTF Curve: {curve_loc}\n"
-                    f"• ITF Trend: {itf_trend} (Relative to 20 EMA)\n\n"
+                    f"• ITF Trend: {itf_trend} (Below 20 EMA)\n\n"
                     f"<b>II. LTF EXECUTION ZONE</b>\n"
                     f"• CMP: Rs {round(cmp, 2)}\n"
                     f"• Score: {ltf_supply['Score']}/7.0\n"
