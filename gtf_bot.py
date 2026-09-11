@@ -5,12 +5,12 @@ import pandas as pd
 import yfinance as yf
 
 # ==========================================
-# CONFIGURATION & STRICT FILTER SETUP
+# CONFIGURATION & FILTER SETUP
 # ==========================================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 RISK_PER_TRADE = 1000  # Default risk in INR (1% of 1 Lakh capital)
-MIN_STRICT_SCORE = 7.0  # Ultra-selective filter: only pristine 7/7 setups pass
+MIN_STRICT_SCORE = 5.5  # Lowered score threshold to allow more quality setups
 
 WATCHLIST = [
     "ABB.NS", "ADANIENT.NS", "ADANIGREEN.NS", "ADANIPORTS.NS", "ADANIPOWER.NS", "ATGL.NS", 
@@ -60,9 +60,9 @@ def classify_candles(df):
     return df
 
 # ==========================================
-# STRICT GTF ZONE SCANNING ENGINE (SOP v4.2)
+# ZONE SCANNING ENGINE (SOP v4.2)
 # ==========================================
-def detect_strict_zones(df, zone_type="Demand"):
+def detect_zones(df, zone_type="Demand"):
     zones = []
     n = len(df)
     if n < 10:
@@ -80,7 +80,7 @@ def detect_strict_zones(df, zone_type="Demand"):
 
         base_candles = []
         base_indices = []
-        for j in range(i, max(0, i - 4), -1):  # Restrict to max 3 base candles for optimal strength
+        for j in range(i, max(0, i - 4), -1):
             if df.iloc[j]['Is_Base']:
                 base_candles.append(df.iloc[j])
                 base_indices.append(j)
@@ -142,14 +142,14 @@ def detect_strict_zones(df, zone_type="Demand"):
         if is_breached or not is_fresh:
             continue
 
-        # Strict 7-Point Scoring
+        # Scoring Logic
         score = 3.0  # Freshness = 3.0
         is_gap = abs(leg_out['Open'] - df.iloc[i]['Close']) > (0.2 * leg_out['Range'])
         strong_leg_out = (len(df) > i+2 and df.iloc[i+2]['Is_Exciting']) or is_gap
         score += 2.0 if strong_leg_out else 1.0
         score += 2.0 if len(base_candles) <= 3 else 0.0
 
-        if score < MIN_STRICT_SCORE:  # Enforce strict 7/7 pristine quality
+        if score < MIN_STRICT_SCORE:
             continue
 
         zones.append({
@@ -171,7 +171,7 @@ def evaluate_mtfa(ticker):
     try:
         stock = yf.Ticker(ticker)
         
-        # Native Quarterly and Monthly HTF Data fetch (Replacing Resampling)
+        # Native Quarterly and Monthly HTF Data fetch
         df_quarterly = stock.history(period="max", interval="3mo")
         df_monthly = stock.history(period="10y", interval="1mo")
         
@@ -181,8 +181,8 @@ def evaluate_mtfa(ticker):
         df_htf = df_quarterly if not df_quarterly.empty and len(df_quarterly) >= 8 else df_monthly
         df_htf = classify_candles(df_htf)
         
-        htf_demand = detect_strict_zones(df_htf, "Demand")
-        htf_supply = detect_strict_zones(df_htf, "Supply")
+        htf_demand = detect_zones(df_htf, "Demand")
+        htf_supply = detect_zones(df_htf, "Supply")
         
         curve_loc = "Equilibrium"
         cmp = float(df_monthly['Close'].iloc[-1])
@@ -221,10 +221,10 @@ def evaluate_mtfa(ticker):
             return
         df_ltf = classify_candles(df_ltf)
         
-        ltf_demand = detect_strict_zones(df_ltf, "Demand")
-        ltf_supply = detect_strict_zones(df_ltf, "Supply")
+        ltf_demand = detect_zones(df_ltf, "Demand")
+        ltf_supply = detect_zones(df_ltf, "Supply")
         
-        # STRICT DEMAND EXECUTION (Entry Type 1 Only for 7/7 Authentic Zones)
+        # DEMAND EXECUTION
         if ltf_demand and curve_loc == "Low / Very Low (Buy Preferred)" and itf_trend == "Bullish":
             pl, dl = ltf_demand['PL'], ltf_demand['DL']
             risk = round(pl - dl, 2)
@@ -236,18 +236,18 @@ def evaluate_mtfa(ticker):
                 target = round(entry + (2 * (entry - sl)), 2)
                 
                 msg = (
-                    f"🟢 <b>STRICT GTF 7/7 DEMAND SETUP ({ltf_demand['Pattern']})</b>: {ticker}\n\n"
+                    f"🟢 <b>GTF DEMAND SETUP ({ltf_demand['Pattern']})</b>: {ticker}\n\n"
                     f"<b>I. MULTI-TIMEFRAME CONFLUENCE</b>\n"
                     f"• HTF Curve: {curve_loc}\n"
                     f"• ITF Trend: {itf_trend} (Above 20 EMA)\n"
                     f"• EMA 20 Support Test: {'Yes (+1pt)' if ema_test else 'No'}\n"
                     f"• Golden Crossover: {'Yes (+1pt)' if golden_cross else 'No'}\n\n"
-                    f"<b>II. LTF EXECUTION (ENTRY TYPE 1)</b>\n"
+                    f"<b>II. LTF EXECUTION</b>\n"
                     f"• CMP: Rs {round(cmp, 2)}\n"
-                    f"• GTF Base Score: {ltf_demand['Score']}/7.0 (Pristine)\n"
+                    f"• GTF Base Score: {ltf_demand['Score']}/7.0\n"
                     f"• Entry Limit: Rs {entry}\n"
                     f"• Stop Loss: Rs {sl}\n"
-                    f"• Base Candles: {ltf_demand['Base_Count']} (Max 3)\n\n"
+                    f"• Base Candles: {ltf_demand['Base_Count']}\n\n"
                     f"<b>III. RISK & POSITION SIZING</b>\n"
                     f"• Risk per Share: Rs {risk}\n"
                     f"• Target 1 (2:1): Rs {target}\n"
@@ -255,7 +255,7 @@ def evaluate_mtfa(ticker):
                 )
                 send_telegram_alert(msg)
 
-        # STRICT SUPPLY EXECUTION (Entry Type 1 Only for 7/7 Authentic Zones)
+        # SUPPLY EXECUTION
         if ltf_supply and curve_loc == "High / Very High (Sell Preferred)" and itf_trend == "Bearish":
             pl, dl = ltf_supply['PL'], ltf_supply['DL']
             risk = round(dl - pl, 2)
@@ -267,17 +267,17 @@ def evaluate_mtfa(ticker):
                 target = round(entry - (2 * (sl - entry)), 2)
                 
                 msg = (
-                    f"🔴 <b>STRICT GTF 7/7 SUPPLY SETUP ({ltf_supply['Pattern']})</b>: {ticker}\n\n"
+                    f"🔴 <b>GTF SUPPLY SETUP ({ltf_supply['Pattern']})</b>: {ticker}\n\n"
                     f"<b>I. MULTI-TIMEFRAME CONFLUENCE</b>\n"
                     f"• HTF Curve: {curve_loc}\n"
                     f"• ITF Trend: {itf_trend} (Below 20 EMA)\n"
                     f"• Death Crossover: {'Yes (+1pt)' if death_cross else 'No'}\n\n"
-                    f"<b>II. LTF EXECUTION (ENTRY TYPE 1)</b>\n"
+                    f"<b>II. LTF EXECUTION</b>\n"
                     f"• CMP: Rs {round(cmp, 2)}\n"
-                    f"• GTF Base Score: {ltf_supply['Score']}/7.0 (Pristine)\n"
+                    f"• GTF Base Score: {ltf_supply['Score']}/7.0\n"
                     f"• Entry Limit: Rs {entry}\n"
                     f"• Stop Loss: Rs {sl}\n"
-                    f"• Base Candles: {ltf_supply['Base_Count']} (Max 3)\n\n"
+                    f"• Base Candles: {ltf_supply['Base_Count']}\n\n"
                     f"<b>III. RISK & POSITION SIZING</b>\n"
                     f"• Risk per Share: Rs {risk}\n"
                     f"• Target 1 (2:1): Rs {target}\n"
