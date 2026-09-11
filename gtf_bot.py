@@ -171,14 +171,18 @@ def evaluate_mtfa(ticker):
     try:
         stock = yf.Ticker(ticker)
         
-        # Native Quarterly and Monthly HTF Data fetch (Replacing Resampling)
-        df_quarterly = stock.history(period="max", interval="3mo")
+        # Multi-HTF Curve Hierarchy (Quarterly -> Monthly -> Weekly)
         df_monthly = stock.history(period="10y", interval="1mo")
-        
         if df_monthly.empty or len(df_monthly) < 5: 
             return
         
-        df_htf = df_quarterly if not df_quarterly.empty and len(df_quarterly) >= 8 else df_monthly
+        df_quarterly = df_monthly.resample('3ME').agg({
+            'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'
+        }).dropna()
+        
+        df_weekly = stock.history(period="3y", interval="1wk")
+        
+        df_htf = df_quarterly if len(df_quarterly) >= 8 else df_monthly
         df_htf = classify_candles(df_htf)
         
         htf_demand = detect_strict_zones(df_htf, "Demand")
@@ -198,7 +202,6 @@ def evaluate_mtfa(ticker):
                     curve_loc = "High / Very High (Sell Preferred)"
 
         # ITF Trend Analysis & EMA Confluence
-        df_weekly = stock.history(period="3y", interval="1wk")
         df_itf = df_weekly if not df_weekly.empty else stock.history(period="2y", interval="1wk")
         if df_itf.empty or len(df_itf) < 25: 
             return
