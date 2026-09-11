@@ -40,12 +40,12 @@ def send_telegram_alert(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": message, "parse_mode": "HTML"}
     try:
-        requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
     except Exception as e:
         print(f"Telegram Communication Error: {e}")
 
 def classify_candles(df):
-    """Vectorized classification based on the 50% Body-to-Range rule."""
     df = df.copy()
     df['Range'] = df['High'] - df['Low']
     df['Body'] = abs(df['Close'] - df['Open'])
@@ -58,15 +58,14 @@ def classify_candles(df):
     return df
 
 def detect_zones(df, zone_type="Demand"):
-    """
-    Stricter zone scanner limiting base candles to max 3 
-    and enforcing high-quality structural standards.
-    """
     zones = []
     n = len(df)
+    if n < 8:
+        return None
     cmp = float(df['Close'].iloc[-1])
     
-    for i in range(n - 2, 4, -1):
+    # Allow up to 5 base candles to catch more structural setups
+    for i in range(n - 2, 5, -1):
         leg_out = df.iloc[i+1]
         
         if not leg_out['Is_Exciting']:
@@ -76,17 +75,16 @@ def detect_zones(df, zone_type="Demand"):
         if zone_type == "Supply" and leg_out['Color'] != 'Red':
             continue
 
-        # Strict Base Aggregation: Max 3 bases for institutional explosion
         base_candles = []
         base_indices = []
-        for j in range(i, max(0, i - 4), -1):
+        for j in range(i, max(0, i - 6), -1):
             if df.iloc[j]['Is_Base']:
                 base_candles.append(df.iloc[j])
                 base_indices.append(j)
             else:
                 break
                 
-        if len(base_candles) == 0 or len(base_candles) > 3:
+        if len(base_candles) == 0 or len(base_candles) > 5:
             continue
             
         leg_in_idx = base_indices[-1] - 1
@@ -105,10 +103,8 @@ def detect_zones(df, zone_type="Demand"):
         if zone_type == "Supply" and leg_out['Close'] >= leg_in_body_low:
             continue
 
-        pattern = ""
-        if zone_type == "Demand":
-            pattern = "DBR" if leg_in['Color'] == 'Red' else "RBR"
-        else:
+        pattern = "DBR" if (zone_type == "Demand" and leg_in['Color'] == 'Red') else "RBR"
+        if zone_type == "Supply":
             pattern = "RBD" if leg_in['Color'] == 'Green' else "DBD"
 
         base_df = pd.DataFrame(base_candles)
@@ -117,17 +113,13 @@ def detect_zones(df, zone_type="Demand"):
             if pl >= cmp:
                 continue
             base_min_wick = base_df['Low'].min()
-            out_min_wick = leg_out['Low']
-            in_min_wick = leg_in['Low']
-            dl = min(in_min_wick, base_min_wick, out_min_wick) if pattern == "DBR" else min(base_min_wick, out_min_wick)
+            dl = min(leg_in['Low'], base_min_wick, leg_out['Low']) if pattern == "DBR" else min(base_min_wick, leg_out['Low'])
         else:
             pl = base_df[['Open', 'Close']].min().min()
             if pl <= cmp:
                 continue
             base_max_wick = base_df['High'].max()
-            out_max_wick = leg_out['High']
-            in_max_wick = leg_in['High']
-            dl = max(in_max_wick, base_max_wick, out_max_wick) if pattern == "RBD" else max(base_max_wick, out_max_wick)
+            dl = max(leg_in['High'], base_max_wick, leg_out['High']) if pattern == "RBD" else max(base_max_wick, leg_out['High'])
 
         post_zone_df = df.iloc[i+2:]
         is_fresh = True
@@ -148,10 +140,9 @@ def detect_zones(df, zone_type="Demand"):
         if is_breached or not is_fresh:
             continue
 
-        # Strict Quality Scoring Weights
         score = 3.0
-        score += 2.0 if (len(df) > i+2 and df.iloc[i+2]['Is_Exciting']) else 0.0
-        score += 2.0 if len(base_candles) == 1 else (1.0 if len(base_candles) == 2 else 0.5)
+        score += 2.0 if (len(df) > i+2 and df.iloc[i+2]['Is_Exciting']) else 1.0
+        score += 2.0 if len(base_candles) <= 3 else 1.0
         
         zones.append({
             'Pattern': pattern,
@@ -169,7 +160,6 @@ def evaluate_mtfa(ticker):
     try:
         stock = yf.Ticker(ticker)
         
-        # 1. HTF Curve Analysis (Monthly)
         df_htf = stock.history(period="5y", interval="1mo")
         if df_htf.empty or len(df_htf) < 5: return
         df_htf = classify_candles(df_htf)
@@ -177,7 +167,7 @@ def evaluate_mtfa(ticker):
         htf_demand = detect_zones(df_htf, "Demand")
         htf_supply = detect_zones(df_htf, "Supply")
         
-        curve_loc = "Equilibrium"
+        curve_loc = "Equilibrium (Follow Trend)"
         cmp = float(df_htf['Close'].iloc[-1])
         
         if htf_demand and htf_supply:
@@ -190,7 +180,6 @@ def evaluate_mtfa(ticker):
                 elif cmp >= sup_pl - (spread / 3):
                     curve_loc = "High (Sell Preferred)"
 
-        # 2. ITF Trend Analysis (Weekly)
         df_itf = stock.history(period="2y", interval="1wk")
         if df_itf.empty or len(df_itf) < 20: return
         df_itf['EMA20'] = df_itf['Close'].ewm(span=20, adjust=False).mean()
@@ -199,7 +188,6 @@ def evaluate_mtfa(ticker):
         itf_ema20 = float(df_itf['EMA20'].iloc[-1])
         itf_trend = "Bullish" if itf_close > itf_ema20 else "Bearish"
 
-        # 3. LTF Execution Analysis (Daily)
         df_ltf = stock.history(period="1y", interval="1d")
         if df_ltf.empty or len(df_ltf) < 50: return
         df_ltf = classify_candles(df_ltf)
@@ -207,20 +195,19 @@ def evaluate_mtfa(ticker):
         ltf_demand = detect_zones(df_ltf, "Demand")
         ltf_supply = detect_zones(df_ltf, "Supply")
         
-        # STRICT DEMAND EXECUTION: Curve MUST be Low, Trend Bullish, Score >= 6.0, Proximity within 1.5%
-        if ltf_demand and curve_loc == "Low (Buy Preferred)" and itf_trend == "Bullish":
+        # RELAXED DEMAND: Allows Equilibrium + wider proximity (3%) + lower score threshold (5.0)
+        if ltf_demand and curve_loc != "High (Sell Preferred)" and itf_trend == "Bullish":
             pl, dl = ltf_demand['PL'], ltf_demand['DL']
             risk = round(pl - dl, 2)
             
-            # Proximity check: Only alert if CMP is within 1.5% of the proximal line
-            if pl <= cmp <= pl * 1.015 and risk > 0 and ltf_demand['Score'] >= 6.0:
+            if pl <= cmp <= pl * 1.03 and risk > 0 and ltf_demand['Score'] >= 5.0:
                 qty = int(RISK_PER_TRADE / risk)
                 entry = round(pl + (risk * 0.05), 2)
                 sl = round(dl - (risk * 0.05), 2)
                 target = round(entry + (2 * (entry - sl)), 2)
                 
                 msg = (
-                    f"🟢 <b>STRICT GTF DEMAND ALERT ({ltf_demand['Pattern']})</b>: {ticker}\n\n"
+                    f"🟢 <b>RELAXED GTF DEMAND ALERT ({ltf_demand['Pattern']})</b>: {ticker}\n\n"
                     f"<b>I. MULTI-TIMEFRAME ALIGNMENT</b>\n"
                     f"• HTF Curve: {curve_loc}\n"
                     f"• ITF Trend: {itf_trend} (Above 20 EMA)\n\n"
@@ -236,20 +223,19 @@ def evaluate_mtfa(ticker):
                 )
                 send_telegram_alert(msg)
 
-        # STRICT SUPPLY EXECUTION: Curve MUST be High, Trend Bearish, Score >= 6.0, Proximity within 1.5%
-        if ltf_supply and curve_loc == "High (Sell Preferred)" and itf_trend == "Bearish":
+        # RELAXED SUPPLY: Allows Equilibrium + wider proximity (3%) + lower score threshold (5.0)
+        if ltf_supply and curve_loc != "Low (Buy Preferred)" and itf_trend == "Bearish":
             pl, dl = ltf_supply['PL'], ltf_supply['DL']
             risk = round(dl - pl, 2)
             
-            # Proximity check: Only alert if CMP is within 1.5% below the proximal line
-            if pl * 0.985 <= cmp <= pl and risk > 0 and ltf_supply['Score'] >= 6.0:
+            if pl * 0.97 <= cmp <= pl and risk > 0 and ltf_supply['Score'] >= 5.0:
                 qty = int(RISK_PER_TRADE / risk)
                 entry = round(pl - (risk * 0.05), 2)
                 sl = round(dl + (risk * 0.05), 2)
                 target = round(entry - (2 * (sl - entry)), 2)
                 
                 msg = (
-                    f"🔴 <b>STRICT GTF SUPPLY ALERT ({ltf_supply['Pattern']})</b>: {ticker}\n\n"
+                    f"🔴 <b>RELAXED GTF SUPPLY ALERT ({ltf_supply['Pattern']})</b>: {ticker}\n\n"
                     f"<b>I. MULTI-TIMEFRAME ALIGNMENT</b>\n"
                     f"• HTF Curve: {curve_loc}\n"
                     f"• ITF Trend: {itf_trend} (Below 20 EMA)\n\n"
@@ -265,8 +251,8 @@ def evaluate_mtfa(ticker):
                 )
                 send_telegram_alert(msg)
 
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Error processing {ticker}: {e}")
 
 if __name__ == "__main__":
     for symbol in WATCHLIST:
