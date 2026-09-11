@@ -9,7 +9,7 @@ import yfinance as yf
 # ==========================================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-RISK_PER_TRADE = 1000  # Default risk in INR
+RISK_PER_TRADE = 1000  # Default risk in INR (1% of 1 Lakh capital)
 
 WATCHLIST = [
     "ABB.NS", "ADANIENT.NS", "ADANIGREEN.NS", "ADANIPORTS.NS", "ADANIPOWER.NS", "ATGL.NS", 
@@ -45,7 +45,11 @@ def send_telegram_alert(message):
     except Exception as e:
         print(f"Telegram Communication Error: {e}")
 
+# ==========================================
+# MICROSTRUCTURE CANDLE CLASSIFICATION
+# ==========================================
 def classify_candles(df):
+    """Vectorized classification of Exciting vs Base candles based on 50% body ratio."""
     df = df.copy()
     df['Range'] = df['High'] - df['Low']
     df['Body'] = abs(df['Close'] - df['Open'])
@@ -57,14 +61,17 @@ def classify_candles(df):
     df['Color'] = np.where(df['Close'] > df['Open'], 'Green', 'Red')
     return df
 
+# ==========================================
+# DYNAMIC ZONE SCANNING ENGINE (SOP v4.2)
+# ==========================================
 def detect_zones(df, zone_type="Demand"):
+    """Scans for authentic Supply/Demand zones using dynamic base counting and Exceptional DL rules."""
     zones = []
     n = len(df)
     if n < 8:
         return None
     cmp = float(df['Close'].iloc[-1])
     
-    # Allow up to 5 base candles to catch more structural setups
     for i in range(n - 2, 5, -1):
         leg_out = df.iloc[i+1]
         
@@ -156,19 +163,34 @@ def detect_zones(df, zone_type="Demand"):
 
     return zones[0] if zones else None
 
+# ==========================================
+# MULTI-TIMEFRAME & MULTI-HTF CURVE COORDINATOR
+# ==========================================
 def evaluate_mtfa(ticker):
+    """Evaluates multi-HTF curve hierarchy (Quarterly, Monthly, Weekly) and executes LTF setup triggers."""
     try:
         stock = yf.Ticker(ticker)
         
-        df_htf = stock.history(period="5y", interval="1mo")
-        if df_htf.empty or len(df_htf) < 5: return
+        # 1. Multi-HTF Curve Retrieval (Quarterly via resampling, Monthly, Weekly)
+        df_monthly = stock.history(period="10y", interval="1mo")
+        if df_monthly.empty or len(df_monthly) < 5: 
+            return
+        
+        df_quarterly = df_monthly.resample('3ME').agg({
+            'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'
+        }).dropna()
+        
+        df_weekly = stock.history(period="3y", interval="1wk")
+        
+        # Select highest available HTF structure for Curve location mapping (Priority: Quarterly -> Monthly -> Weekly)
+        df_htf = df_quarterly if len(df_quarterly) >= 8 else df_monthly
         df_htf = classify_candles(df_htf)
         
         htf_demand = detect_zones(df_htf, "Demand")
         htf_supply = detect_zones(df_htf, "Supply")
         
         curve_loc = "Equilibrium (Follow Trend)"
-        cmp = float(df_htf['Close'].iloc[-1])
+        cmp = float(df_monthly['Close'].iloc[-1])
         
         if htf_demand and htf_supply:
             dem_pl = htf_demand['PL']
@@ -180,22 +202,26 @@ def evaluate_mtfa(ticker):
                 elif cmp >= sup_pl - (spread / 3):
                     curve_loc = "High (Sell Preferred)"
 
-        df_itf = stock.history(period="2y", interval="1wk")
-        if df_itf.empty or len(df_itf) < 20: return
+        # 2. ITF Trend Analysis (Weekly)
+        df_itf = df_weekly if not df_weekly.empty else stock.history(period="2y", interval="1wk")
+        if df_itf.empty or len(df_itf) < 20: 
+            return
         df_itf['EMA20'] = df_itf['Close'].ewm(span=20, adjust=False).mean()
         
         itf_close = float(df_itf['Close'].iloc[-1])
         itf_ema20 = float(df_itf['EMA20'].iloc[-1])
         itf_trend = "Bullish" if itf_close > itf_ema20 else "Bearish"
 
+        # 3. LTF Execution Analysis (Daily)
         df_ltf = stock.history(period="1y", interval="1d")
-        if df_ltf.empty or len(df_ltf) < 50: return
+        if df_ltf.empty or len(df_ltf) < 50: 
+            return
         df_ltf = classify_candles(df_ltf)
         
         ltf_demand = detect_zones(df_ltf, "Demand")
         ltf_supply = detect_zones(df_ltf, "Supply")
         
-        # RELAXED DEMAND: Allows Equilibrium + wider proximity (3%) + lower score threshold (5.0)
+        # Demand Execution Trigger
         if ltf_demand and curve_loc != "High (Sell Preferred)" and itf_trend == "Bullish":
             pl, dl = ltf_demand['PL'], ltf_demand['DL']
             risk = round(pl - dl, 2)
@@ -207,9 +233,9 @@ def evaluate_mtfa(ticker):
                 target = round(entry + (2 * (entry - sl)), 2)
                 
                 msg = (
-                    f"🟢 <b>RELAXED GTF DEMAND ALERT ({ltf_demand['Pattern']})</b>: {ticker}\n\n"
+                    f"🟢 <b>GTF MULTI-HTF DEMAND ALERT ({ltf_demand['Pattern']})</b>: {ticker}\n\n"
                     f"<b>I. MULTI-TIMEFRAME ALIGNMENT</b>\n"
-                    f"• HTF Curve: {curve_loc}\n"
+                    f"• HTF Curve Location: {curve_loc}\n"
                     f"• ITF Trend: {itf_trend} (Above 20 EMA)\n\n"
                     f"<b>II. LTF EXECUTION ZONE</b>\n"
                     f"• CMP: Rs {round(cmp, 2)}\n"
@@ -223,7 +249,7 @@ def evaluate_mtfa(ticker):
                 )
                 send_telegram_alert(msg)
 
-        # RELAXED SUPPLY: Allows Equilibrium + wider proximity (3%) + lower score threshold (5.0)
+        # Supply Execution Trigger
         if ltf_supply and curve_loc != "Low (Buy Preferred)" and itf_trend == "Bearish":
             pl, dl = ltf_supply['PL'], ltf_supply['DL']
             risk = round(dl - pl, 2)
@@ -235,9 +261,9 @@ def evaluate_mtfa(ticker):
                 target = round(entry - (2 * (sl - entry)), 2)
                 
                 msg = (
-                    f"🔴 <b>RELAXED GTF SUPPLY ALERT ({ltf_supply['Pattern']})</b>: {ticker}\n\n"
+                    f"🔴 <b>GTF MULTI-HTF SUPPLY ALERT ({ltf_supply['Pattern']})</b>: {ticker}\n\n"
                     f"<b>I. MULTI-TIMEFRAME ALIGNMENT</b>\n"
-                    f"• HTF Curve: {curve_loc}\n"
+                    f"• HTF Curve Location: {curve_loc}\n"
                     f"• ITF Trend: {itf_trend} (Below 20 EMA)\n\n"
                     f"<b>II. LTF EXECUTION ZONE</b>\n"
                     f"• CMP: Rs {round(cmp, 2)}\n"
