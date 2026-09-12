@@ -1,4 +1,4 @@
- name: GTF Market Scanner
+name: GTF Market Scanner
 
 on:
   schedule:
@@ -18,12 +18,14 @@ jobs:
           python-version: '3.11'
 
       - name: Install Dependencies
+        # Added the missing math and charting libraries required by the script
         run: |
-          pip install yfinance requests pandas
+          pip install yfinance requests pandas numpy matplotlib mplfinance scipy
 
       - name: Clean and Execute GTF Scanner
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          # Changed to match the exact variable name in the Python code
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }} 
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python -c "with open('gtf_bot.py', 'r', encoding='utf-8') as f: c = f.read().replace('\xa0', ' '); open('gtf_bot.py', 'w', encoding='utf-8').write(c)"
