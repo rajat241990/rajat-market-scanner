@@ -433,6 +433,11 @@ def run_sop_analysis(ticker: str):
 
     # Format Standardized Execution Report
     side_label = "🟢 LONG SETUP" if trade_side == "BUY" else "🔴 SHORT SETUP"
+    
+    # Calculate statuses beforehand to avoid f-string quote clashing
+    freshness_status = "100% Fresh (Untested)" if selected_zone['Is_Fresh'] else f"Tested {selected_zone['Tested_Count']}x"
+    closing_status = "PASSED (Decisive)" if selected_zone['Closing_Concept'] else "Standard"
+
     alert_msg = (
         f"{side_label}: <b>{ticker}</b> (GTF SOP v4.2)\n"
         f"<b>Active Triplet</b>: {ACTIVE_TRIPLET} ({cfg['htf']} | {cfg['itf']} | {cfg['ltf']})\n\n"
@@ -453,8 +458,8 @@ def run_sop_analysis(ticker: str):
         f"• Proximal Line (PL): Rs {pl} (B2W Marked)\n"
         f"• Distal Line (DL): Rs {dl} (Exceptional Wick Checked)\n"
         f"• Base Candles Count: {selected_zone['Base_Count']}\n"
-        f"• Freshness Status: {'100% Fresh (Untested)' if selected_zone['Is_Fresh'] else f'Tested {selected_zone['Tested_Count']}x'}\n"
-        f"• Closing Concept: {'PASSED (Decisive)' if selected_zone['Closing_Concept'] else 'Standard'}\n\n"
+        f"• Freshness Status: {freshness_status}\n"
+        f"• Closing Concept: {closing_status}\n\n"
         f"<b>SECTION IV: QUANTITATIVE SCORING & EXECUTION</b>\n"
         f"• GTF Base Quality Score: <b>{selected_zone['Base_Score']}/7.0</b>\n"
         f"• Confluence Points: EMA20 (+{1.0 if ema_aligned else 0}) | Cross (+{1.0 if cross_aligned else 0})\n"
