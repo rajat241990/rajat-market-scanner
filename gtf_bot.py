@@ -400,6 +400,10 @@ def run_sop_analysis(ticker: str):
     if cross_aligned:
         confluence_score += 1.0
 
+    # Filter out weak zones (Score strictly >= 5.5)
+    if confluence_score < 5.5:
+        return
+
     # Entry Strategy Selection
     if selected_zone['Base_Score'] >= 7.0 and selected_zone['Is_Fresh']:
         entry_type = "Entry Type 1 (Set & Forget)"
