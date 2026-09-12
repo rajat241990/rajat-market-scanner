@@ -10,8 +10,8 @@ import yfinance as yf
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-BASE_CAPITAL = 100000.0  # ₹1,00,000 base capital
-RISK_PERCENT = 1.0       # 1% Beginner (₹1,000), 1.5% Intermediate, 2% Pro
+BASE_CAPITAL = 100000.0  # INR base capital
+RISK_PERCENT = 1.0       # 1% Beginner, 1.5% Intermediate, 2% Pro
 RISK_PER_TRADE = BASE_CAPITAL * (RISK_PERCENT / 100.0)
 
 # Timeframe Triplet Architecture
