@@ -19,12 +19,14 @@ jobs:
           python-version: '3.11'
 
       - name: Install Dependencies
+        # FIXED: Added scipy, matplotlib, and mplfinance
         run: |
-          pip install yfinance requests pandas numpy
+          pip install yfinance requests pandas numpy scipy matplotlib mplfinance
 
       - name: Clean and Execute GTF Scanner
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          # FIXED: Changed TELEGRAM_TOKEN to TELEGRAM_BOT_TOKEN
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }} 
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python -c "with open('gtf_bot.py', 'r', encoding='utf-8') as f: c = f.read().replace('\xa0', ' '); open('gtf_bot.py', 'w', encoding='utf-8').write(c)"
