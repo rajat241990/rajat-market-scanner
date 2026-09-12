@@ -1,5 +1,24 @@
 import os
+import sys
 import logging
+import subprocess
+
+# ==============================================================================
+# AUTO-INSTALL DEPENDENCIES
+# ==============================================================================
+def install_and_import(package):
+    try:
+        __import__(package)
+    except ImportError:
+        logging.info(f"Package '{package}' not found. Installing now...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+# Ensure required third-party packages are installed before running
+required_packages = ['requests', 'numpy', 'pandas', 'yfinance', 'mplfinance', 'scipy', 'matplotlib']
+for pkg in required_packages:
+    install_and_import(pkg)
+
+# Now it is safe to import them
 import requests
 import numpy as np
 import pandas as pd
